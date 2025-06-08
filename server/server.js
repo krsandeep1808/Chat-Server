@@ -1,94 +1,86 @@
 const net = require('net');
+const { randomUUID } = require('crypto');
 
-class ChatServer {
-  constructor() {
-    this.clients = new Map();
-    this.server = net.createServer();
-    this.clientIdCounter = 0;
-    this.port = process.env.PORT || 3000;
-  }
-
-  initialize() {
-    this.server.on('connection', (socket) => {
-      // Handle HTTP health checks from Render
-      socket.once('data', (data) => {
-        const dataStr = data.toString();
-        if (dataStr.startsWith('GET') || dataStr.startsWith('HEAD')) {
-          socket.write('HTTP/1.1 200 OK\r\n\r\n');
-          socket.end();
-          return;
-        }
-
-        // Regular chat connection
-        this.handleChatConnection(socket, data);
-      });
-
-      socket.on('error', (err) => {
-        console.error('Socket error:', err);
-      });
-    });
-
-    // Handle server errors
-    this.server.on('error', (err) => {
-      console.error('Server error:', err);
-    });
-
-    // Keep alive for Render free tier
-    setInterval(() => {
-      console.log('Keep-alive ping');
-      this.broadcast('ping');
-    }, 4 * 60 * 1000); // 4 minutes
-  }
-
-  handleChatConnection(socket, initialData) {
-    const clientId = ++this.clientIdCounter;
-    this.clients.set(clientId, socket);
-    console.log(`Client ${clientId} connected`);
-
-    socket.setEncoding('utf8');
+class EnhancedChatServer {
+    constructor(port) {
+        this.port = port;
+        this.clients = new Map(); // Map of socket to client info
+        this.server = net.createServer();
+        
+        this.setupServer();
+    }
     
-    // Send initial data if any
-    if (initialData) {
-      this.broadcast(`Client ${clientId}: ${initialData.toString().trim()}`, clientId);
+    setupServer() {
+        this.server.on('connection', (socket) => {
+            const clientId = randomUUID().slice(0, 8);
+            this.handleNewConnection(socket, clientId);
+        });
+        
+        this.server.on('error', (err) => {
+            console.error('\x1b[31mServer error:\x1b[0m', err);
+        });
     }
-
-    // Handle incoming messages
-    socket.on('data', (data) => {
-      const message = data.toString().trim();
-      if (message) {
-        console.log(`Client ${clientId}: ${message}`);
-        this.broadcast(`Client ${clientId}: ${message}`, clientId);
-      }
-    });
-
-    // Handle disconnection
-    socket.on('end', () => {
-      console.log(`Client ${clientId} disconnected`);
-      this.clients.delete(clientId);
-      this.broadcast(`Client ${clientId} left the chat`, clientId);
-    });
-  }
-
-  broadcast(message, excludeClientId = null) {
-    for (const [clientId, socket] of this.clients) {
-      if (clientId !== excludeClientId && socket.writable) {
-        socket.write(`${message}\n`);
-      }
+    
+    handleNewConnection(socket, clientId) {
+        // Set initial client data (username assigned after first message)
+        this.clients.set(socket, { id: clientId, username: `User-${clientId}` });
+        
+        console.log(`\x1b[32mNew connection (${this.clients.size} total)\x1b[0m`);
+        
+        // Send welcome message
+        socket.write('\x1b[36mWelcome to the chat! Enter your username:\x1b[0m\n');
+        
+        // Set up event handlers
+        socket.on('data', (data) => {
+            const clientData = this.clients.get(socket);
+            const message = data.toString().trim();
+            
+            // First message is treated as username
+            if (!clientData.usernameSet) {
+                clientData.username = message || clientData.username;
+                clientData.usernameSet = true;
+                this.broadcast(`\x1b[33m${clientData.username} joined the chat\x1b[0m\n`, socket);
+                socket.write(`\x1b[36mYou are now known as ${clientData.username}\x1b[0m\n`);
+            } else {
+                this.broadcast(`\x1b[35m${clientData.username}:\x1b[0m ${message}\n`, socket);
+            }
+        });
+        
+        socket.on('end', () => {
+            const clientData = this.clients.get(socket);
+            if (clientData?.usernameSet) {
+                this.broadcast(`\x1b[33m${clientData.username} left the chat\x1b[0m\n`, socket);
+            }
+            this.clients.delete(socket);
+            console.log(`\x1b[31mClient disconnected (${this.clients.size} remaining)\x1b[0m`);
+        });
+        
+        socket.on('error', (err) => {
+            console.error('\x1b[31mClient socket error:\x1b[0m', err);
+            this.clients.delete(socket);
+        });
     }
-  }
-
-  start() {
-    this.initialize();
-    this.server.listen(this.port, () => {
-      console.log(`Server running on port ${this.port}`);
-    });
-  }
+    
+    broadcast(message, sender) {
+        const timestamp = new Date().toLocaleTimeString();
+        const formattedMessage = `\x1b[90m[${timestamp}]\x1b[0m ${message}`;
+        
+        for (const [client, _] of this.clients) {
+            if (client !== sender && client.writable) {
+                client.write(formattedMessage);
+            }
+        }
+    }
+    
+    start() {
+        this.server.listen(this.port, () => {
+            console.log(`\x1b[32mServer listening on port ${this.port}\x1b[0m`);
+            console.log('\x1b[36mWaiting for connections...\x1b[0m');
+        });
+    }
 }
 
-// Start the server if this file is run directly
-if (require.main === module) {
-  const server = new ChatServer();
-  server.start();
-}
-
-module.exports = ChatServer;
+// Start the enhanced server
+const PORT = 3000;
+const chatServer = new EnhancedChatServer(PORT);
+chatServer.start();
