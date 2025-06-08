@@ -1,133 +1,94 @@
 const net = require('net');
-const { EventEmitter } = require('events');
 
-class ChatServer extends EventEmitter {
-    constructor(port) {
-        super();
-        this.port = port;
-        this.clients = new Map(); // Store clients with unique IDs
-        this.server = net.createServer();
-        this.clientIdCounter = 0;
-        
-        this.setupServer();
-    }
-    
-    setupServer() {
-        this.server.on('connection', (socket) => {
-            const clientId = ++this.clientIdCounter;
-            this.clients.set(clientId, socket);
-            this.emit('client-connected', clientId);
-            
-            socket.on('data', (data) => {
-                const message = data.toString().trim();
-                if (message) {
-                    this.emit('message', { clientId, message });
-                }
-            });
-            
-            socket.on('end', () => {
-                this.clients.delete(clientId);
-                this.emit('client-disconnected', clientId);
-            });
-            
-            socket.on('error', (err) => {
-                this.clients.delete(clientId);
-                this.emit('client-error', { clientId, error: err });
-            });
-        });
-        
-        this.server.on('error', (err) => {
-            this.emit('server-error', err);
-        });
-    }
-    
-    start() {
-        return new Promise((resolve, reject) => {
-            this.server.listen(this.port, () => {
-                this.emit('server-started', this.port);
-                resolve(this.port);
-            });
-            
-            this.server.once('error', reject);
-        });
-    }
-    
-    stop() {
-        return new Promise((resolve) => {
-            // Close all client connections
-            for (const [clientId, socket] of this.clients) {
-                socket.end();
-            }
-            this.clients.clear();
-            
-            // Close the server
-            this.server.close(() => {
-                this.emit('server-stopped');
-                resolve();
-            });
-        });
-    }
-    
-    broadcast(message, excludeClientId = null) {
-        for (const [clientId, socket] of this.clients) {
-            if (clientId !== excludeClientId) {
-                socket.write(`${message}\n`);
-            }
+class ChatServer {
+  constructor() {
+    this.clients = new Map();
+    this.server = net.createServer();
+    this.clientIdCounter = 0;
+    this.port = process.env.PORT || 3000;
+  }
+
+  initialize() {
+    this.server.on('connection', (socket) => {
+      // Handle HTTP health checks from Render
+      socket.once('data', (data) => {
+        const dataStr = data.toString();
+        if (dataStr.startsWith('GET') || dataStr.startsWith('HEAD')) {
+          socket.write('HTTP/1.1 200 OK\r\n\r\n');
+          socket.end();
+          return;
         }
-    }
+
+        // Regular chat connection
+        this.handleChatConnection(socket, data);
+      });
+
+      socket.on('error', (err) => {
+        console.error('Socket error:', err);
+      });
+    });
+
+    // Handle server errors
+    this.server.on('error', (err) => {
+      console.error('Server error:', err);
+    });
+
+    // Keep alive for Render free tier
+    setInterval(() => {
+      console.log('Keep-alive ping');
+      this.broadcast('ping');
+    }, 4 * 60 * 1000); // 4 minutes
+  }
+
+  handleChatConnection(socket, initialData) {
+    const clientId = ++this.clientIdCounter;
+    this.clients.set(clientId, socket);
+    console.log(`Client ${clientId} connected`);
+
+    socket.setEncoding('utf8');
     
-    sendToClient(clientId, message) {
-        const socket = this.clients.get(clientId);
-        if (socket) {
-            socket.write(`${message}\n`);
-            return true;
-        }
-        return false;
+    // Send initial data if any
+    if (initialData) {
+      this.broadcast(`Client ${clientId}: ${initialData.toString().trim()}`, clientId);
     }
+
+    // Handle incoming messages
+    socket.on('data', (data) => {
+      const message = data.toString().trim();
+      if (message) {
+        console.log(`Client ${clientId}: ${message}`);
+        this.broadcast(`Client ${clientId}: ${message}`, clientId);
+      }
+    });
+
+    // Handle disconnection
+    socket.on('end', () => {
+      console.log(`Client ${clientId} disconnected`);
+      this.clients.delete(clientId);
+      this.broadcast(`Client ${clientId} left the chat`, clientId);
+    });
+  }
+
+  broadcast(message, excludeClientId = null) {
+    for (const [clientId, socket] of this.clients) {
+      if (clientId !== excludeClientId && socket.writable) {
+        socket.write(`${message}\n`);
+      }
+    }
+  }
+
+  start() {
+    this.initialize();
+    this.server.listen(this.port, () => {
+      console.log(`Server running on port ${this.port}`);
+    });
+  }
 }
 
-// Main server execution
+// Start the server if this file is run directly
 if (require.main === module) {
-    const PORT = process.env.PORT || 3000;
-    const server = new ChatServer(PORT);
-    
-    // Event listeners for logging
-    server.on('server-started', (port) => {
-        console.log(`Server listening on port ${port}`);
-    });
-    
-    server.on('client-connected', (clientId) => {
-        console.log(`Client ${clientId} connected`);
-        server.broadcast(`Client ${clientId} joined the chat`);
-    });
-    
-    server.on('client-disconnected', (clientId) => {
-        console.log(`Client ${clientId} disconnected`);
-        server.broadcast(`Client ${clientId} left the chat`);
-    });
-    
-    server.on('message', ({ clientId, message }) => {
-        console.log(`Client ${clientId}: ${message}`);
-        server.broadcast(`Client ${clientId}: ${message}`, clientId);
-    });
-    
-    server.on('client-error', ({ clientId, error }) => {
-        console.error(`Client ${clientId} error:`, error.message);
-    });
-    
-    server.on('server-error', (error) => {
-        console.error('Server error:', error.message);
-    });
-    
-    // Start the server
-    server.start().catch(console.error);
-    
-    // Handle graceful shutdown
-    process.on('SIGINT', async () => {
-        console.log('\nShutting down server...');
-        await server.stop();
-        process.exit();
-    });
+  const server = new ChatServer();
+  server.start();
 }
 
 module.exports = ChatServer;
