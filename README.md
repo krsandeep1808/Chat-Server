@@ -136,7 +136,14 @@ chat-app/
 
 
 ## Screenshots of terminal
+### server running
 <img width="100%" height="auto"  src="Screenshots/Capture 1.JPG" />
+
+### client running
+<img width="100%" height="auto"  src="Screenshots/Capture 2.JPG" />
+
+### test
+<img width="100%" height="auto"  src="Screenshots/Capture 3.JPG" />
 ---
 
 **Happy Chatting!** 💬
