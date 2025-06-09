@@ -95,15 +95,6 @@ Run all tests:
 npm test
 ```
 
-Run server tests only:
-```bash
-npm run test:server
-```
-
-Run client tests only:
-```bash
-npm run test:client
-```
 
 ## Configuration
 
