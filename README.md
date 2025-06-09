@@ -1,4 +1,4 @@
-# Real-Time Chat Application
+# Chat Sever
 
 A simple chat server and client implementation using Node.js native sockets.
 
