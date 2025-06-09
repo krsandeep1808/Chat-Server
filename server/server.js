@@ -76,32 +76,31 @@ class ChatServer extends EventEmitter {
         });
     }
     
-    broadcast(message, excludeClientId = null) {
-        let broadcastCount = 0;
-        const failedClients = [];
-        
-        for (const [clientId, socket] of this.clients) {
-            if (clientId !== excludeClientId && socket.writable) {
-                try {
-                    socket.write(`${message}\n`, (err) => {
-                        if (err) {
-                            console.error(`Failed to send to client ${clientId}:`, err.message);
-                            failedClients.push(clientId);
-                        }
-                    });
-                    broadcastCount++;
-                } catch (err) {
-                    console.error(`Error sending to client ${clientId}:`, err.message);
-                    failedClients.push(clientId);
-                }
-            }
-        }
-        
-        // Remove any failed clients
-        failedClients.forEach(clientId => this.removeClient(clientId));
-        
-        return broadcastCount;
+    // In your ClientManager or server code
+broadcast(data, sender) {
+  const failedClients = [];
+  
+  for (const client of this.clients) {
+    if (client !== sender && client.writable) {
+      try {
+        client.write(data, (err) => {
+          if (err) {
+            console.error(`Failed to send to client: ${err.message}`);
+            failedClients.push(client);
+          }
+        });
+      } catch (err) {
+        console.error(`Error sending to client: ${err.message}`);
+        failedClients.push(client);
+      }
     }
+  }
+
+  // Clean up failed clients
+  failedClients.forEach(client => {
+    this.clients.delete(client);
+    client.destroy();
+  });
 }
 
 // Main server execution
