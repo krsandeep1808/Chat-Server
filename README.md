@@ -89,6 +89,21 @@ Name changed to Alice
 > /exit
 Disconnected from server
 ```
+## Testing
+Run all tests:
+```bash
+npm test
+```
+
+Run server tests only:
+```bash
+npm run test:server
+```
+
+Run client tests only:
+```bash
+npm run test:client
+```
 
 ## Configuration
 
