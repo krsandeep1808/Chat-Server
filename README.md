@@ -1,4 +1,4 @@
-# Chat Sever
+# Chat-Sever
 
 A simple chat server and client implementation using Node.js native sockets.
 
