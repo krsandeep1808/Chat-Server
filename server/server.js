@@ -78,13 +78,16 @@ class ChatServer extends EventEmitter {
         });
     }
     
-    broadcast(message, excludeClientId = null) {
-        for (const [clientId, socket] of this.clients) {
-            if (clientId !== excludeClientId) {
-                socket.write(`${message}\n`);
+    broadcast(message, senderId) {
+    for (let [id, socket] of this.clients.entries()) {
+        if (id !== senderId) {
+            if (socket.writable) {
+                socket.write(message);
             }
         }
     }
+}
+
     
     sendToClient(clientId, message) {
         const socket = this.clients.get(clientId);
