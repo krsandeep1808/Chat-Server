@@ -1,22 +1,20 @@
 const net = require('net');
+const http = require('http');
 
-const PORT = process.env.PORT || 3000;
-
+// TCP Chat Server
 let clientIdCounter = 0;
-const clients = new Map(); // Store client sockets by ID
+const clients = new Map();
 
-const server = net.createServer((socket) => {
+const tcpServer = net.createServer((socket) => {
     const clientId = ++clientIdCounter;
     clients.set(clientId, socket);
 
     console.log(`Client ${clientId} connected`);
 
-    // Handle incoming messages
     socket.on('data', (data) => {
         const message = data.toString().trim();
         console.log(`Broadcasting: Client ${clientId}: ${message}`);
 
-        // Broadcast to all other clients
         for (const [id, clientSocket] of clients.entries()) {
             if (id !== clientId) {
                 clientSocket.write(`Client ${clientId}: ${message}\n`);
@@ -24,21 +22,28 @@ const server = net.createServer((socket) => {
         }
     });
 
-    // Handle client disconnect (clean or abrupt)
     socket.on('close', () => {
         console.log(`Client ${clientId} disconnected`);
         clients.delete(clientId);
     });
 
-    // Handle socket errors like ECONNRESET or EPIPE
     socket.on('error', (err) => {
         console.log(`Client ${clientId} error: ${err.message}`);
-        socket.destroy(); // Ensure socket is fully closed
+        socket.destroy();
         clients.delete(clientId);
     });
 });
 
-// Start the server
-server.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
+const TCP_PORT = process.env.TCP_PORT || 10000;
+tcpServer.listen(TCP_PORT, () => {
+    console.log(`TCP server listening on port ${TCP_PORT}`);
+});
+
+// Dummy HTTP server to satisfy Render
+const HTTP_PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end("Chat server is running.\n");
+}).listen(HTTP_PORT, () => {
+    console.log(`HTTP server running on port ${HTTP_PORT}`);
 });
