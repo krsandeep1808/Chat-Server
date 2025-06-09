@@ -134,6 +134,10 @@ chat-app/
 └── README.md            # This documentation
 ```
 
+
+## Screenshots of terminal
+<img width="100%" height="auto"  src="Screenshots/Capture 1.JPG" />
 ---
 
 **Happy Chatting!** 💬
+
